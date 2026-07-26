@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PLACEHOLDER — replace with the real TACTIX TX mark exported as SVG -->
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#F96968" stroke-width="10" stroke-linejoin="miter">
+    <path d="M10 10 H60 V26 H42 V70 H26 V26 H10 Z"/>
+    <path d="M30 30 L90 90 M90 30 L30 90" stroke-width="10"/>
+  </g>
+</svg>
