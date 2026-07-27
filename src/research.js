@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import fs from "fs";
 import { RSS_SOURCES } from "./rss-sources.js";
 import { geminiSearchGrounded, geminiGenerate } from "./gemini.js";
+import { GENRES } from "./store-links.js";
 
 const parser = new Parser({
   timeout: 15000, // per-feed timeout (ms) — a single slow/unresponsive feed
@@ -56,7 +57,7 @@ async function fetchRssItems() {
 
 /**
  * Main research entry point. Returns a single structured story object:
- * { headline, category, summary, sourceUrl, imagePromptSeed }
+ * { headline, category, genre, summary, sourceUrl, imagePromptSeed }
  */
 export async function research() {
   const history = loadHistory();
@@ -93,7 +94,7 @@ From the candidates below, pick the ONE most interesting/newsworthy story.
 Respond ONLY with valid JSON, no markdown fences, in this exact shape:
 {
   "headline": "short punchy headline, max 8 words",
-  "category": "one of: Tactical News, Battlefield Reports, Campaign Intelligence, Lore Archive, Player Analysis",
+  "genre": "one of exactly: ${GENRES.join(", ")} — pick whichever best matches the story's setting/army/faction/theme",
   "summary": "2-3 sentence factual summary",
   "sourceUrl": "the source link",
   "imagePromptSeed": "a short visual description of a scene/illustration that captures this story, no text/logos/words in it"
@@ -103,7 +104,8 @@ Candidates:
 ${candidateText}
 `);
 
-  const story = JSON.parse(picked.replace(/^```json|```$/g, "").trim());
+  const parsed = JSON.parse(picked.replace(/^```json|```$/g, "").trim());
+  const story = { ...parsed, category: "News" };
 
   history.push(story.sourceUrl);
   saveHistory(history);

@@ -2,6 +2,25 @@ import fetch from "node-fetch";
 
 const API_KEY = process.env.GEMINI_API_KEY;
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+const TIMEOUT_MS = 60_000; // no Gemini call had a timeout before — a hang
+                            // here (rate limit, network stall) could block
+                            // the whole pipeline indefinitely
+
+/** fetch wrapper with a hard timeout — every Gemini call below uses this. */
+async function fetchWithTimeout(url, options) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`Gemini call timed out after ${TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 /**
  * Text generation with Google Search grounding enabled — lets Gemini pull
@@ -10,7 +29,7 @@ const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
  * leaks, forum chatter, breaking news).
  */
 export async function geminiSearchGrounded(prompt, model = "gemini-flash-latest") {
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
+  const res = await fetchWithTimeout(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -25,7 +44,7 @@ export async function geminiSearchGrounded(prompt, model = "gemini-flash-latest"
 
 /** Plain text generation, no grounding (used for copywriting). */
 export async function geminiGenerate(prompt, model = "gemini-flash-latest") {
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
+  const res = await fetchWithTimeout(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] })
@@ -42,7 +61,7 @@ export async function geminiGenerate(prompt, model = "gemini-flash-latest") {
  * compose.js instead, so it's always crisp and on-brand.
  */
 export async function geminiGenerateImage(prompt, model = "gemini-2.5-flash-image") {
-  const res = await fetch(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
+  const res = await fetchWithTimeout(`${BASE}/${model}:generateContent?key=${API_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] })

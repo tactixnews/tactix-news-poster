@@ -14,17 +14,20 @@ fantasy clichés, hype-spam, exclamation-stacking, corporate filler.
 
 /** Generates a short editorial article body (3-4 paragraphs) for a story. */
 export async function writeArticle(story) {
+  const formatInstruction =
+    story.category === "News"
+      ? "Write a short news article (3-4 paragraphs, ~150-250 words). Open with the concrete news, then add context/analysis in the TACTIX voice."
+      : `Write a short ${story.category.toLowerCase()} piece (3-4 paragraphs, ~150-250 words) in the TACTIX voice — practical and specific, not just atmospheric.`;
+
   return geminiGenerate(`
 ${VOICE_SYSTEM_PROMPT}
 
-Write a short news article (3-4 paragraphs, ~150-250 words) for this story.
-Open with the concrete news, then add context/analysis in the TACTIX voice.
+${formatInstruction}
 Do not repeat the headline verbatim as the first line. Return plain text
 paragraphs only, no markdown, no headline.
 
 Headline: ${story.headline}
 Category: ${story.category}
-Summary: ${story.summary}
-Source: ${story.sourceUrl}
+Summary: ${story.summary}${story.sourceUrl ? `\nSource: ${story.sourceUrl}` : ""}
 `);
 }

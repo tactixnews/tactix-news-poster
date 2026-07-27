@@ -1,28 +1,37 @@
 import "dotenv/config";
 import { research } from "./research.js";
+import { generateEvergreenContent } from "./evergreen-content.js";
+import { nextContentType } from "./content-type-rotation.js";
 import { generateStoryImage } from "./image-gen.js";
-import { composePost } from "./compose.js";
+import { composeSocialImage, composeSiteImage } from "./compose.js";
 import { writeCaption } from "./copywrite.js";
 import { writeArticle } from "./write-article.js";
 import { publishArticle } from "./site-generator.js";
-import { nextStoreLink } from "./store-links.js";
+import { getStoreLinkForGenre } from "./store-links.js";
 import { postToBluesky } from "./post-bluesky.js";
 import { postToMastodon } from "./post-mastodon.js";
 
 async function run() {
-  console.log("1/6 — researching...");
-  const story = await research();
-  console.log(`Picked story: ${story.headline} [${story.category}]`);
+  const contentType = nextContentType();
+  console.log(`1/6 — content type: ${contentType} — researching/generating...`);
+  const story = contentType === "News" ? await research() : await generateEvergreenContent(contentType);
+  console.log(`Picked story: ${story.headline} [${story.category} / ${story.genre}]`);
 
   console.log("2/6 — generating illustration...");
   const rawImage = await generateStoryImage(story);
 
-  console.log("3/6 — compositing branded graphic...");
-  const finalImage = await composePost(rawImage, story);
+  console.log("3/6 — compositing branded graphics (social + site versions)...");
+  // Social gets the headline baked in as a standalone shareable graphic.
+  // Site gets the clean illustration only — the headline already shows as
+  // real HTML text right next to it, so baking it in again would duplicate.
+  const [socialImage, siteImage] = await Promise.all([
+    composeSocialImage(rawImage, story),
+    composeSiteImage(rawImage)
+  ]);
 
-  // Picked once, shared by the social caption and the site article so both
-  // point to the same store on this run.
-  const storeLink = nextStoreLink();
+  // Store link is chosen by the story's genre, so the CTA always matches
+  // what the post is actually about — not a blind rotation.
+  const storeLink = getStoreLinkForGenre(story.genre);
 
   console.log("4/6 — writing caption + article...");
   const [caption, articleBody] = await Promise.all([
@@ -31,13 +40,13 @@ async function run() {
   ]);
 
   console.log("5/6 — publishing to site...");
-  const article = publishArticle(story, finalImage, articleBody, storeLink);
+  const article = publishArticle(story, siteImage, articleBody, storeLink);
   console.log(`Published: docs/articles/${article.slug}.html`);
 
   console.log("6/6 — posting to social...");
   await Promise.all([
-    postToBluesky(caption, finalImage, story),
-    postToMastodon(caption, finalImage, story)
+    postToBluesky(caption, socialImage, story),
+    postToMastodon(caption, socialImage, story)
   ]);
 
   console.log("Done.");

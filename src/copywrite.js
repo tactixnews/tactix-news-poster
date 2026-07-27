@@ -39,8 +39,7 @@ ${VOICE_SYSTEM_PROMPT}
 Story:
 Headline: ${story.headline}
 Category: ${story.category}
-Summary: ${story.summary}
-Source: ${story.sourceUrl}
+Summary: ${story.summary}${story.sourceUrl ? `\nSource: ${story.sourceUrl}` : ""}
 
 Write ONE caption for this story. Return only the caption text, nothing else.
 `);

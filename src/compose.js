@@ -55,14 +55,15 @@ function fitHeadline(text) {
 }
 
 /**
- * Composites the branded TACTIX post graphic:
- * base illustration -> dark gradient scrim (legibility) -> category tag ->
- * headline -> TX corner mark.
+ * Composites the branded SOCIAL MEDIA graphic (headline text baked in as
+ * pixels): base illustration -> dark gradient scrim (legibility) ->
+ * category tag -> headline -> TX corner mark. Used for Bluesky/Mastodon,
+ * where the image needs to stand alone as a shareable graphic.
  *
  * `logoPngPath` should point to assets/logo/tx-mark.png (the real exported
  * logo mark from the brand guide).
  */
-export async function composePost(imageBuffer, story, logoPngPath = "./assets/logo/tx-mark.png") {
+export async function composeSocialImage(imageBuffer, story, logoPngPath = "./assets/logo/tx-mark.png") {
   const { fontSize, lineHeight, lines } = fitHeadline(story.headline);
   const startY = SIZE - 120 - lines.length * lineHeight;
 
@@ -96,19 +97,27 @@ export async function composePost(imageBuffer, story, logoPngPath = "./assets/lo
 </svg>`.trim();
 
   const base = await sharp(imageBuffer).resize(SIZE, SIZE, { fit: "cover" }).toBuffer();
-
-  const composites = [{ input: Buffer.from(overlay), top: 0, left: 0 }];
-
-  // TX corner mark, bottom right — a real raster PNG logo, resized down.
-  if (fs.existsSync(logoPngPath)) {
-    const logoSize = 88;
-    const logoBuffer = await sharp(logoPngPath).resize(logoSize, logoSize).toBuffer();
-    composites.push({
-      input: logoBuffer,
-      top: SIZE - logoSize - 40,
-      left: SIZE - logoSize - 40
-    });
-  }
+  const composites = [{ input: Buffer.from(overlay), top: 0, left: 0 }, ...(await logoComposite(logoPngPath))];
 
   return sharp(base).composite(composites).jpeg({ quality: 85, mozjpeg: true }).toBuffer();
+}
+
+/**
+ * Prepares the WEBSITE image: clean illustration, no headline/category text
+ * baked in (the site already shows the headline as real HTML text right
+ * next to the image, so baking it in again would be redundant/duplicated).
+ * Keeps the TX logo mark for brand consistency, no dark scrim either since
+ * the site's own hero section applies its own CSS gradient on top.
+ */
+export async function composeSiteImage(imageBuffer, logoPngPath = "./assets/logo/tx-mark.png") {
+  const base = await sharp(imageBuffer).resize(SIZE, SIZE, { fit: "cover" }).toBuffer();
+  const composites = await logoComposite(logoPngPath);
+  return sharp(base).composite(composites).jpeg({ quality: 85, mozjpeg: true }).toBuffer();
+}
+
+async function logoComposite(logoPngPath) {
+  if (!fs.existsSync(logoPngPath)) return [];
+  const logoSize = 88;
+  const logoBuffer = await sharp(logoPngPath).resize(logoSize, logoSize).toBuffer();
+  return [{ input: logoBuffer, top: SIZE - logoSize - 40, left: SIZE - logoSize - 40 }];
 }

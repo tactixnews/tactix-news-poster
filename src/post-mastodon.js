@@ -3,6 +3,7 @@ import FormData from "form-data";
 
 const INSTANCE = process.env.MASTODON_INSTANCE_URL; // e.g. https://mastodon.social
 const TOKEN = process.env.MASTODON_ACCESS_TOKEN;
+const TIMEOUT_MS = 30_000;
 
 async function uploadMedia(imageBuffer, altText) {
   const form = new FormData();
@@ -12,7 +13,8 @@ async function uploadMedia(imageBuffer, altText) {
   const res = await fetch(`${INSTANCE}/api/v2/media`, {
     method: "POST",
     headers: { Authorization: `Bearer ${TOKEN}` },
-    body: form
+    body: form,
+    signal: AbortSignal.timeout(TIMEOUT_MS)
   });
   if (!res.ok) throw new Error(`Mastodon media upload failed: ${res.status} ${await res.text()}`);
   return res.json();
@@ -27,7 +29,8 @@ export async function postToMastodon(caption, imageBuffer, story) {
       Authorization: `Bearer ${TOKEN}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ status: caption, media_ids: [media.id] })
+    body: JSON.stringify({ status: caption, media_ids: [media.id] }),
+    signal: AbortSignal.timeout(TIMEOUT_MS)
   });
   if (!res.ok) throw new Error(`Mastodon post failed: ${res.status} ${await res.text()}`);
   console.log("Posted to Mastodon.");

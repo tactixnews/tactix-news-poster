@@ -17,8 +17,10 @@ export async function generateStoryImage(story) {
 Editorial illustration for a premium gaming media outlet, square format.
 Scene: ${story.imagePromptSeed}
 Style: modern tech-editorial, cinematic lighting, dramatic red and deep black
-color grading, high detail, premium magazine quality.
-No text, no words, no logos, no watermarks anywhere in the image.
+color grading, high detail, premium magazine quality, purely visual scene
+with no readable text anywhere. Absolutely no typography, no lettering, no
+words, no signage, no logos, no captions, no watermarks, no writing of any
+kind rendered in the image — visuals only.
 `.trim();
 
   const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}` +

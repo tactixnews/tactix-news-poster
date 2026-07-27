@@ -3,13 +3,7 @@ import path from "path";
 
 const DOCS_DIR = "./docs";
 const DATA_FILE = path.join(DOCS_DIR, "data", "articles.json");
-const NAV_CATEGORIES = [
-  "Tactical News",
-  "Battlefield Reports",
-  "Campaign Intelligence",
-  "Lore Archive",
-  "Player Analysis"
-];
+const NAV_CATEGORIES = ["News", "Tutorial", "Tips & Trick"];
 
 function slugify(str) {
   return str
@@ -37,6 +31,10 @@ function saveArticles(articles) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(articles, null, 2));
 }
 
+function categorySlug(category) {
+  return slugify(category) + ".html";
+}
+
 function masthead(activePath = "") {
   return `
 <header class="masthead">
@@ -48,7 +46,7 @@ function masthead(activePath = "") {
     <span class="tagline">Understanding the strategy behind every game</span>
   </div>
   <nav class="masthead-nav">
-    ${NAV_CATEGORIES.map(c => `<a href="${activePath}index.html">${escapeHtml(c)}</a>`).join("\n    ")}
+    ${NAV_CATEGORIES.map(c => `<a href="${activePath}${categorySlug(c)}">${escapeHtml(c)}</a>`).join("\n    ")}
   </nav>
 </header>`;
 }
@@ -118,6 +116,26 @@ function buildHomepage(articles) {
   });
 }
 
+function buildCategoryPage(category, articles) {
+  const filtered = articles.filter(a => a.category === category);
+
+  const bodyHtml = filtered.length
+    ? `
+<h2 class="section-label">${escapeHtml(category)}</h2>
+<div class="grid">
+  ${filtered.map(a => articleCard(a, "")).join("\n  ")}
+</div>`
+    : `
+<h2 class="section-label">${escapeHtml(category)}</h2>
+<p style="margin: 0 5vw 60px; opacity: 0.6;">No ${escapeHtml(category.toLowerCase())} articles yet — check back soon.</p>`;
+
+  return baseLayout({
+    title: `${category} — TACTIX`,
+    activePath: "",
+    bodyHtml
+  });
+}
+
 function buildArticlePage(article) {
   const bodyHtml = `
 <article class="article-wrap">
@@ -135,7 +153,7 @@ function buildArticlePage(article) {
   <div class="cta-block">
     Get free miniatures &mdash; <a href="${article.ctaUrl}" target="_blank" rel="noopener">${escapeHtml(article.ctaLabel)}</a>
   </div>
-  <p class="source-link">Source: <a href="${article.sourceUrl}" target="_blank" rel="noopener">${escapeHtml(article.sourceUrl)}</a></p>
+  ${article.sourceUrl ? `<p class="source-link">Source: <a href="${article.sourceUrl}" target="_blank" rel="noopener">${escapeHtml(article.sourceUrl)}</a></p>` : ""}
 </article>`;
 
   return baseLayout({
@@ -182,6 +200,12 @@ export function publishArticle(story, imageBuffer, articleBody, storeLink) {
 
   fs.writeFileSync(path.join(DOCS_DIR, "articles", `${slug}.html`), buildArticlePage(article));
   fs.writeFileSync(path.join(DOCS_DIR, "index.html"), buildHomepage(articles));
+
+  // Regenerate every nav category page so links never 404 or dead-end,
+  // even for a category with zero articles yet.
+  for (const category of NAV_CATEGORIES) {
+    fs.writeFileSync(path.join(DOCS_DIR, categorySlug(category)), buildCategoryPage(category, articles));
+  }
 
   return article;
 }
