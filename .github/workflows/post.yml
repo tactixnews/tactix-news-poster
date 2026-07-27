@@ -1,5 +1,12 @@
 name: TACTIX Auto Post
 
+# Explicit write permission for the bot's own commits (posted-history,
+# site publishing). Many repos default the Actions token to read-only,
+# which would make every "Commit posted-history and site" step below fail
+# SILENTLY (the old `|| true` was hiding that failure) — this fixes it.
+permissions:
+  contents: write
+
 on:
   schedule:
     # Times are UTC and drift late on free-tier Actions (known GitHub
@@ -14,7 +21,7 @@ on:
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # hard ceiling — a live run once hung 25+ min with no error; this force-fails it instead
+    timeout-minutes: 15 # hard ceiling — a live run once hung 25+ min with no error; this force-fails it instead
     steps:
       - uses: actions/checkout@v4
 
@@ -46,5 +53,9 @@ jobs:
           git config user.name "tactix-bot"
           git config user.email "actions@github.com"
           git add data/posted-history.json data/link-rotation.json docs/ || true
-          git diff --staged --quiet || git commit -m "chore: publish latest article [skip ci]"
-          git push || true
+          if git diff --staged --quiet; then
+            echo "Nothing new to commit."
+          else
+            git commit -m "chore: publish latest article [skip ci]"
+            git push
+          fi
