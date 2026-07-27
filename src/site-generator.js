@@ -4,6 +4,7 @@ import path from "path";
 const DOCS_DIR = "./docs";
 const DATA_FILE = path.join(DOCS_DIR, "data", "articles.json");
 const NAV_CATEGORIES = ["News", "Tutorial", "Tips & Trick"];
+const SITE_URL = "https://tactixnews.github.io/tactix-news-poster";
 
 function slugify(str) {
   return str
@@ -136,6 +137,22 @@ function buildCategoryPage(category, articles) {
   });
 }
 
+function buildSitemap(articles) {
+  const staticUrls = ["", ...NAV_CATEGORIES.map(categorySlug)];
+  const articleUrls = articles.map(a => `articles/${a.slug}.html`);
+  const allUrls = [...staticUrls, ...articleUrls];
+
+  const urlEntries = allUrls
+    .map(u => `  <url><loc>${SITE_URL}/${u}</loc></url>`)
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urlEntries}
+</urlset>
+`;
+}
+
 function buildArticlePage(article) {
   const bodyHtml = `
 <article class="article-wrap">
@@ -206,6 +223,8 @@ export function publishArticle(story, imageBuffer, articleBody, storeLink) {
   for (const category of NAV_CATEGORIES) {
     fs.writeFileSync(path.join(DOCS_DIR, categorySlug(category)), buildCategoryPage(category, articles));
   }
+
+  fs.writeFileSync(path.join(DOCS_DIR, "sitemap.xml"), buildSitemap(articles));
 
   return article;
 }

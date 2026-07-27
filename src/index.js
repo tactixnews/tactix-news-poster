@@ -4,8 +4,7 @@ import { generateEvergreenContent } from "./evergreen-content.js";
 import { nextContentType } from "./content-type-rotation.js";
 import { generateStoryImage } from "./image-gen.js";
 import { composeSocialImage, composeSiteImage } from "./compose.js";
-import { writeCaption } from "./copywrite.js";
-import { writeArticle } from "./write-article.js";
+import { writeContentBundle } from "./copywrite.js";
 import { publishArticle } from "./site-generator.js";
 import { getStoreLinkForGenre } from "./store-links.js";
 import { postToBluesky } from "./post-bluesky.js";
@@ -13,14 +12,14 @@ import { postToMastodon } from "./post-mastodon.js";
 
 async function run() {
   const contentType = nextContentType();
-  console.log(`1/6 — content type: ${contentType} — researching/generating...`);
+  console.log(`1/5 — content type: ${contentType} — researching/generating...`);
   const story = contentType === "News" ? await research() : await generateEvergreenContent(contentType);
   console.log(`Picked story: ${story.headline} [${story.category} / ${story.genre}]`);
 
-  console.log("2/6 — generating illustration...");
+  console.log("2/5 — generating illustration...");
   const rawImage = await generateStoryImage(story);
 
-  console.log("3/6 — compositing branded graphics (social + site versions)...");
+  console.log("3/5 — compositing branded graphics (social + site versions)...");
   // Social gets the headline baked in as a standalone shareable graphic.
   // Site gets the clean illustration only — the headline already shows as
   // real HTML text right next to it, so baking it in again would duplicate.
@@ -33,17 +32,13 @@ async function run() {
   // what the post is actually about — not a blind rotation.
   const storeLink = getStoreLinkForGenre(story.genre);
 
-  console.log("4/6 — writing caption + article...");
-  const [caption, articleBody] = await Promise.all([
-    writeCaption(story, storeLink),
-    writeArticle(story)
-  ]);
+  console.log("4/5 — writing caption + article (single Gemini call)...");
+  const { caption, articleBody } = await writeContentBundle(story, storeLink);
 
-  console.log("5/6 — publishing to site...");
+  console.log("5/5 — publishing to site and posting to social...");
   const article = publishArticle(story, siteImage, articleBody, storeLink);
   console.log(`Published: docs/articles/${article.slug}.html`);
 
-  console.log("6/6 — posting to social...");
   await Promise.all([
     postToBluesky(caption, socialImage, story),
     postToMastodon(caption, socialImage, story)
