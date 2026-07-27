@@ -4,6 +4,8 @@ import { RSS_SOURCES } from "./rss-sources.js";
 import { geminiSearchGrounded, geminiGenerate } from "./gemini.js";
 
 const parser = new Parser({
+  timeout: 15000, // per-feed timeout (ms) — a single slow/unresponsive feed
+                  // was previously able to stall the whole sequential loop
   headers: {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -21,24 +23,34 @@ function saveHistory(history) {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(-200), null, 2));
 }
 
+/**
+ * Fetches all RSS sources IN PARALLEL (not one-at-a-time) with a 15s
+ * timeout each. A live run once took 10+ minutes total because feeds were
+ * fetched sequentially with no per-feed timeout — one slow source could
+ * stall everything behind it.
+ */
 async function fetchRssItems() {
+  const results = await Promise.allSettled(
+    RSS_SOURCES.map(source => parser.parseURL(source.url).then(feed => ({ source, feed })))
+  );
+
   const items = [];
-  for (const source of RSS_SOURCES) {
-    try {
-      const feed = await parser.parseURL(source.url);
-      for (const item of feed.items.slice(0, 5)) {
-        items.push({
-          source: source.name,
-          title: item.title,
-          link: item.link,
-          summary: item.contentSnippet || item.content || "",
-          pubDate: item.pubDate
-        });
-      }
-    } catch (err) {
-      console.warn(`RSS fetch failed for ${source.name}: ${err.message}`);
+  results.forEach((result, i) => {
+    const source = RSS_SOURCES[i];
+    if (result.status === "rejected") {
+      console.warn(`RSS fetch failed for ${source.name}: ${result.reason.message}`);
+      return;
     }
-  }
+    for (const item of result.value.feed.items.slice(0, 5)) {
+      items.push({
+        source: source.name,
+        title: item.title,
+        link: item.link,
+        summary: item.contentSnippet || item.content || "",
+        pubDate: item.pubDate
+      });
+    }
+  });
   return items;
 }
 
