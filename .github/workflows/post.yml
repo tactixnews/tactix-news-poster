@@ -1,0 +1,49 @@
+name: TACTIX Auto Post
+
+on:
+  schedule:
+    # Times are UTC and drift late on free-tier Actions (known GitHub
+    # limitation) — shift earlier than your true target times to compensate,
+    # same fix used on the BattleFoundry pipeline.
+    - cron: "0 1 * * *"
+    - cron: "0 7 * * *"
+    - cron: "0 13 * * *"
+    - cron: "0 19 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Archivo Black font (for headline compositing)
+        run: |
+          mkdir -p ~/.fonts
+          curl -L -o ~/.fonts/ArchivoBlack-Regular.ttf \
+            "https://github.com/google/fonts/raw/main/ofl/archivoblack/ArchivoBlack-Regular.ttf"
+          fc-cache -f ~/.fonts
+
+      - name: Run pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BLUESKY_HANDLE: ${{ secrets.BLUESKY_HANDLE }}
+          BLUESKY_APP_PASSWORD: ${{ secrets.BLUESKY_APP_PASSWORD }}
+          MASTODON_INSTANCE_URL: ${{ secrets.MASTODON_INSTANCE_URL }}
+          MASTODON_ACCESS_TOKEN: ${{ secrets.MASTODON_ACCESS_TOKEN }}
+        run: npm run run
+
+      - name: Commit posted-history and site
+        run: |
+          git config user.name "tactix-bot"
+          git config user.email "actions@github.com"
+          git add data/posted-history.json data/link-rotation.json docs/ || true
+          git diff --staged --quiet || git commit -m "chore: publish latest article [skip ci]"
+          git push || true
