@@ -5,12 +5,17 @@ const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const TIMEOUT_MS = 60_000;
 
 // Retried automatically — these are transient server-side conditions, not
-// problems with the key/request. 503 "high demand" happened twice in a row
-// on a live run with no code fix possible; retrying with backoff is the
-// correct handling for it.
+// problems with the key/request.
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const MAX_ATTEMPTS = 4;
 const BACKOFF_MS = [5_000, 15_000, 30_000]; // delay before attempts 2, 3, 4
+
+// If the primary model is stuck in a sustained high-demand window (all 4
+// retries still 503), try one specific pinned model as a fallback instead
+// of just giving up — "gemini-flash-latest" is an alias that may route to
+// a currently-overloaded tier; a pinned version can have separate capacity.
+const PRIMARY_MODEL = "gemini-flash-latest";
+const FALLBACK_MODEL = "gemini-2.0-flash";
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -46,10 +51,8 @@ async function fetchWithTimeout(url, options) {
 
 /**
  * fetchWithTimeout + automatic retry with backoff on transient errors
- * (429 rate limit, 5xx server errors — including the "high demand" 503
- * that's hit this project more than once). Non-retryable errors (e.g. a
- * genuine 403 permission problem, or a malformed request) fail immediately
- * — retrying those would just waste time on something a retry can't fix.
+ * (429 rate limit, 5xx server errors). Non-retryable errors (e.g. a
+ * genuine 403 permission problem) fail immediately.
  */
 async function fetchWithRetry(url, options) {
   let lastErr;
@@ -76,31 +79,50 @@ async function fetchWithRetry(url, options) {
 }
 
 /**
- * Text generation with Google Search grounding enabled — lets Gemini pull
- * in live web results before answering. Used to fill gaps the RSS feeds
- * don't cover (rumors, leaks, forum chatter, breaking news).
+ * Calls the given model with full retry; if it exhausts retries on a
+ * retryable error AND we're on the primary model, tries the fallback model
+ * once (fresh set of retries) before finally giving up.
  */
-export async function geminiSearchGrounded(prompt, model = "gemini-flash-latest") {
+async function callWithModelFallback(buildBody, model) {
   const res = await fetchWithRetry(`${BASE}/${model}:generateContent`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({
+    body: JSON.stringify(buildBody)
+  });
+
+  if (res.ok) return res;
+
+  if (model === PRIMARY_MODEL && RETRYABLE_STATUS.has(res.status)) {
+    console.warn(`Primary model (${PRIMARY_MODEL}) still failing after retries — trying fallback model ${FALLBACK_MODEL}`);
+    return callWithModelFallback(buildBody, FALLBACK_MODEL);
+  }
+
+  return res;
+}
+
+/**
+ * Text generation with Google Search grounding enabled — lets Gemini pull
+ * in live web results before answering.
+ */
+export async function geminiSearchGrounded(prompt, model = PRIMARY_MODEL) {
+  const res = await callWithModelFallback(
+    {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       tools: [{ google_search: {} }]
-    })
-  });
+    },
+    model
+  );
   if (!res.ok) throw new Error(`Gemini search-grounded call failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return extractText(data);
 }
 
 /** Plain text generation, no grounding. */
-export async function geminiGenerate(prompt, model = "gemini-flash-latest") {
-  const res = await fetchWithRetry(`${BASE}/${model}:generateContent`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }] })
-  });
+export async function geminiGenerate(prompt, model = PRIMARY_MODEL) {
+  const res = await callWithModelFallback(
+    { contents: [{ role: "user", parts: [{ text: prompt }] }] },
+    model
+  );
   if (!res.ok) throw new Error(`Gemini generate call failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return extractText(data);
